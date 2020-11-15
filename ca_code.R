@@ -17,6 +17,8 @@ library(factoextra)
 library(car)
 library(MASS)
 library(caret)
+library(randomForest)
+library(xgboost)
 
 
 # Importing the files
@@ -86,7 +88,7 @@ wk_new_cust <- txn2 %>% mutate(new = week_no - min_week) %>% group_by(week_no) %
 # Get recency considerng the entire data (in terms of days - with observation point of the max day)
 
 cust_rec <- txn2 %>% group_by(household_key) %>% summarise(lst_pur = max(day))
-cust_rec <- cust_rec %>% mutate(rec = max(lst_pur)-lst_pur) %>% select(c(household_key,rec))
+cust_rec <- cust_rec %>% mutate(rec = max(lst_pur)-lst_pur) %>% dplyr::select(c(household_key,rec))
 
 describe(cust_rec)
 
@@ -102,7 +104,7 @@ k2 <- kmeans(rec, centers = 4, nstart = 25)
 k2
 cust_rec2 <- data.frame(cust_rec, k2$cluster)
 cust_rec3 <- cust_rec2 %>% mutate(rec_score = case_when( k2.cluster == 3 ~ 2L, k2.cluster == 2 ~ 3L, TRUE ~ k2.cluster)) %>% 
-            select(c(household_key,rec, rec_score))
+            dplyr::select(c(household_key,rec, rec_score))
 
 describe(cust_rec3)
 
@@ -127,7 +129,7 @@ k3 <- kmeans(freq, centers = 4, nstart = 25)
 k3
 cust_freq2 <- data.frame(cust_freq, k3$cluster)
 cust_freq3 <- cust_freq2 %>% mutate(freq_score = case_when( k3.cluster == 2 ~ 1L, k3.cluster == 1 ~ 2L, TRUE ~ k3.cluster)) %>% 
-  select(c(household_key,freq, freq_score))
+  dplyr::select(c(household_key,freq, freq_score))
 
 describe(cust_freq3)
 
@@ -149,7 +151,7 @@ k4 <- kmeans(mon, centers = 4, nstart = 25)
 k4
 cust_mon2 <- data.frame(cust_mon, k4$cluster)
 cust_mon3 <- cust_mon2 %>% mutate(mon_score = case_when( k4.cluster == 4 ~ 2L, k4.cluster == 2 ~ 4L, TRUE ~ k4.cluster)) %>% 
-  select(c(household_key,sls, mon_score))
+  dplyr::select(c(household_key,sls, mon_score))
 
 describe(cust_mon3)
 
@@ -158,8 +160,8 @@ describe(cust_mon3)
 # Overall score can be calculated by just adding up the individual scores
 
 
-cust_rfm <- cust_freq3 %>% left_join(select(cust_rec3, rec, rec_score, household_key), by = c("household_key"="household_key")) %>% 
-            left_join(select(cust_mon3,sls,mon_score, household_key), by = c("household_key"= "household_key"))
+cust_rfm <- cust_freq3 %>% left_join(dplyr::select(cust_rec3, rec, rec_score, household_key), by = c("household_key"="household_key")) %>% 
+            left_join(dplyr::select(cust_mon3,sls,mon_score, household_key), by = c("household_key"= "household_key"))
 cust_rfm <- cust_rfm %>% mutate(overall_score = freq_score+rec_score+mon_score)
 
 
@@ -187,7 +189,7 @@ txn3 <- rfm_dat %>% group_by(household_key) %>% mutate(min_week = min(week_no))
 # Get recency considerng the entire data (in terms of days - with observation point of the max day)
 
 cust_rec_50 <- rfm_dat %>% group_by(household_key) %>% summarise(lst_pur = max(day))
-cust_rec_50 <- cust_rec_50 %>% mutate(rec = max(lst_pur)-lst_pur) %>% select(c(household_key,rec))
+cust_rec_50 <- cust_rec_50 %>% mutate(rec = max(lst_pur)-lst_pur) %>% dplyr::select(c(household_key,rec))
 
 
 
@@ -205,7 +207,7 @@ k2_50 <- kmeans(rec_50, centers = 4, nstart = 25)
 k2_50
 cust_rec2_50 <- data.frame(cust_rec_50, k2_50$cluster)
 cust_rec3_50 <- cust_rec2_50 %>% mutate(rec_score = case_when( k2_50.cluster == 3 ~ 2L, k2_50.cluster == 2 ~ 4L,k2_50.cluster == 1 ~ 3L,k2_50.cluster == 4 ~ 1L, TRUE ~ k2_50.cluster)) %>% 
-  select(c(household_key,rec, rec_score))
+  dplyr::select(c(household_key,rec, rec_score))
 
 describe(cust_rec3_50)
 
@@ -229,7 +231,7 @@ k3_50 <- kmeans(freq_50, centers = 4, nstart = 25)
 k3_50
 cust_freq2_50 <- data.frame(cust_freq_50, k3_50$cluster)
 cust_freq3_50 <- cust_freq2_50 %>% mutate(freq_score = case_when( k3_50.cluster == 4 ~ 1L, k3_50.cluster == 3 ~ 4L, k3_50.cluster == 2 ~ 3L, k3_50.cluster == 1 ~ 2L, TRUE ~ k3_50.cluster)) %>% 
-  select(c(household_key,freq, freq_score))
+  dplyr::select(c(household_key,freq, freq_score))
 
 describe(cust_freq3_50)
 
@@ -252,7 +254,7 @@ k4_50 <- kmeans(mon_50, centers = 4, nstart = 25)
 k4_50
 cust_mon2_50 <- data.frame(cust_mon_50, k4_50$cluster)
 cust_mon3_50 <- cust_mon2_50 %>% mutate(mon_score = case_when( k4_50.cluster == 4 ~ 2L, k4_50.cluster == 3 ~ 4L, k4_50.cluster == 2 ~ 3L, TRUE ~ k4_50.cluster)) %>% 
-  select(c(household_key,sls, mon_score))
+  dplyr::select(c(household_key,sls, mon_score))
 
 describe(cust_mon3_50)
 
@@ -260,8 +262,8 @@ describe(cust_mon3_50)
 # Overall score can be calculated by just adding up the individual scores
 
 
-cust_rfm_50 <- cust_freq3_50 %>% left_join(select(cust_rec3_50, rec, rec_score, household_key), by = c("household_key"="household_key")) %>% 
-  left_join(select(cust_mon3_50,sls,mon_score, household_key), by = c("household_key"= "household_key"))
+cust_rfm_50 <- cust_freq3_50 %>% left_join(dplyr::select(cust_rec3_50, rec, rec_score, household_key), by = c("household_key"="household_key")) %>% 
+  left_join(dplyr::select(cust_mon3_50,sls,mon_score, household_key), by = c("household_key"= "household_key"))
 cust_rfm_50 <- cust_rfm_50 %>% mutate(overall_score = freq_score+rec_score+mon_score)
 
 
@@ -288,14 +290,14 @@ k4_50 <- kmeans(ltv, centers = 4, nstart = 25)
 k4_50
 cust_ltv2 <- data.frame(cust_ltv, k4_50$cluster)
 cust_ltv3 <- cust_ltv2 %>% mutate(ltv_seg = case_when( k4_50.cluster == 4 ~ 'High LTV', k4_50.cluster == 1 ~ 'High LTV', k4_50.cluster == 2 ~ 'Low LTV', TRUE ~ 'Med LTV')) %>% 
-  select(c(household_key,ltv, ltv_seg))
+  dplyr::select(c(household_key,ltv, ltv_seg))
 
 describe(cust_ltv3)
 
 
 # Joining the LTV values (target variable) to the predictor variables which we have
 
-ltv_rfm_dat <- cust_rfm_50 %>% left_join(select(cust_ltv3, ltv, ltv_seg, household_key), by = c("household_key" = "household_key"))
+ltv_rfm_dat <- cust_rfm_50 %>% left_join(dplyr::select(cust_ltv3, ltv, ltv_seg, household_key), by = c("household_key" = "household_key"))
 
 # Funtion for getting % NAs of cols in any table
 get.na <- function(df)
@@ -320,9 +322,12 @@ ltv_rfm_dat <- data.table(ltv_rfm_dat)
 ltv_rfm_dat2 <- one_hot(ltv_rfm_dat)
 
 
+###########################################   Experiment 1
+
+
 # Removing features from dataset
 
-ltv_rfm_dat3 <- ltv_rfm_dat2 %>% select(c(freq_score,rec_score,mon_score, overall_score, `segment_High val`, `segment_Low Val`,ltv_seg))
+ltv_rfm_dat3 <- ltv_rfm_dat2 %>% dplyr::select(c(freq_score,rec_score,mon_score, overall_score, `segment_High val`, `segment_Low Val`,ltv_seg))
 
 
 # Recoding target variable
@@ -349,23 +354,78 @@ train <- train %>% dplyr::select(-c(id))
 
 
 # Multiordinal Logistic Regression
-
-
+set.seed(234)
 polr_mod = polr(ltv_seg ~ freq_score + rec_score + mon_score , data = train, Hess = TRUE)
 summary(polr_mod)
 
 
 
+#Compute confusion table
 
-head(test)
-
-
-
-
-#Compute confusion table and misclassification error
 predict_tbl = predict(polr_mod,test)
+predict_tbl_train = predict(polr_mod,train)
 confusionMatrix(table(test$ltv_seg, predict_tbl))
-mean(as.character(datatest$rpurchase) != as.character(predictrpurchase))
+confusionMatrix(table(train$ltv_seg, predict_tbl_train))
+
+
+
+
+
+###########################################   Experiment 2
+
+
+
+
+# Removing features from dataset
+
+ltv_rfm_dat3 <- ltv_rfm_dat2 %>% dplyr::select(c(freq_score,rec_score,mon_score, overall_score, `segment_High val`, `segment_Low Val`,ltv_seg))
+
+
+# Recoding target variable
+
+ltv_rfm_dat3$ltv_seg <- factor(ltv_rfm_dat3$ltv_seg, order = T, levels = c("Low LTV", "Med LTV", "High LTV"))
+
+
+# Experiment 1 : Taking only R, F and M scores to predict LTV segment
+
+head(ltv_rfm_dat5)
+ltv_rfm_dat5 <- ltv_rfm_dat3[,c(1,2,3,7)]
+
+# # Converting scores to ordered levels
+# ltv_rfm_dat4$freq_score <- factor(ltv_rfm_dat4$freq_score, order = T, levels = c(1,2,3,4,5))
+# ltv_rfm_dat4$rec_score <- factor(ltv_rfm_dat4$rec_score, order = T, levels = c(1,2,3,4,5))
+# ltv_rfm_dat4$mon_score <- factor(ltv_rfm_dat4$mon_score, order = T, levels = c(1,2,3,4,5))
+
+# Splitting to train and test
+
+ltv_rfm_dat5$id <- 1:nrow(ltv_rfm_dat5)
+train2 <- ltv_rfm_dat5 %>% sample_frac(.75) 
+test2  <- anti_join(ltv_rfm_dat5, train2, by = 'id') %>% dplyr::select(-c(id))
+train2 <- train2 %>% dplyr::select(-c(id))
+
+
+# Random Forest
+set.seed(234)
+rf_mod = randomForest(ltv_seg ~ . , data = train2)
+summary(rf_mod)
+
+
+
+#Compute confusion table
+
+predict_tbl = predict(rf_mod,test2)
+predict_tbl_train = predict(rf_mod,train2)
+confusionMatrix(table(test2$ltv_seg, predict_tbl))
+confusionMatrix(table(train2$ltv_seg, predict_tbl_train))
+
+
+###########################################   Experiment 3
+
+
+# Decision Tree
+set.seed(234)
+rf_mod = randomForest(ltv_seg ~ . , data = train2)
+summary(rf_mod)
 
 
 
