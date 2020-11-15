@@ -1,5 +1,8 @@
 getwd()
+install.packages("factoextra")
+install.packages("tibble")
 
+library(tibble)
 library(magrittr)
 library(tidyverse)
 library(data.table)
@@ -10,6 +13,7 @@ library(ggplot2)
 library(mltools)
 library(janitor)
 library(reshape2)
+library(factoextra)
 
 
 # Importing the files
@@ -65,13 +69,97 @@ ggplot(wk_txn,aes(week_no, orders))+geom_line()
 ## Does not seem to have any outliers in chosen period
 ## No missing weeks also
 
-# Distinct customers per week
 
-?melt()
-wk_cust <- txn %>% group_by(week_no) %>% summarise(rev = sum()) %>% arrange(week_no)
-head(wk_txn)
-ggplot(wk_txn,aes(week_no,rev))+geom_line()
+# No of new customers per week
+
+txn2 <- txn %>% group_by(household_key) %>% mutate(min_week = min(week_no))
+wk_new_cust <- txn2 %>% mutate(new = week_no - min_week) %>% group_by(week_no) %>% summarise(new_cust = n_distinct(household_key[new == 0]))
+
+## Since data has been provided for only a set of 2500 households, there are negligible new customers from week 16
+## we can assume there are no new customers
 
 
+
+# Get recency considerng the entire data (in terms of days - with observation point of the max day)
+
+cust_rec <- txn2 %>% group_by(household_key) %>% summarise(lst_pur = max(day))
+cust_rec <- cust_rec %>% mutate(rec = max(lst_pur)-lst_pur) %>% select(c(household_key,rec))
+
+describe(cust_rec)
+
+# Use k-means clustering to assign scores to customers based on recency
+
+rec <- cust_rec$rec
+rec<- as.data.frame(rec)
+
+fviz_nbclust(rec, kmeans, method = "wss")
+
+set.seed(234)
+k2 <- kmeans(rec, centers = 4, nstart = 25)
+k2
+cust_rec2 <- data.frame(cust_rec, k2$cluster)
+cust_rec3 <- cust_rec2 %>% mutate(rec_score = case_when( k2.cluster == 3 ~ 2L, k2.cluster == 2 ~ 3L, TRUE ~ k2.cluster)) %>% 
+            select(c(household_key,rec, rec_score))
+
+describe(cust_rec3)
+
+
+
+# Get frequency considerng the entire data (in terms of count of visit days)
+
+
+cust_freq <- txn2 %>% group_by(household_key) %>% summarise(freq = n_distinct(day))
+describe(cust_freq)
+
+
+# Use k-means clustering to assign scores to customers based on frequency
+
+freq <- cust_freq$freq
+freq <- as.data.frame(freq)
+
+fviz_nbclust(freq, kmeans, method = "wss")
+
+set.seed(234)
+k3 <- kmeans(freq, centers = 4, nstart = 25)
+k3
+cust_freq2 <- data.frame(cust_freq, k3$cluster)
+cust_freq3 <- cust_freq2 %>% mutate(freq_score = case_when( k3.cluster == 2 ~ 1L, k3.cluster == 1 ~ 2L, TRUE ~ k3.cluster)) %>% 
+  select(c(household_key,freq, freq_score))
+
+describe(cust_freq3)
+
+# Get monetary value considerng the entire data (in terms of total sales per household)
+
+
+cust_mon <- txn2 %>% group_by(household_key) %>% summarise(sls = sum(sales_value-(retail_disc+coupon_match_disc)))
+describe(cust_mon)
+
+# Use k-means clustering to assign scores to customers based on revenue
+
+mon <- cust_mon$sls
+mon <- as.data.frame(mon)
+
+fviz_nbclust(mon, kmeans, method = "wss")
+
+set.seed(234)
+k4 <- kmeans(mon, centers = 4, nstart = 25)
+k4
+cust_mon2 <- data.frame(cust_mon, k4$cluster)
+cust_mon3 <- cust_mon2 %>% mutate(mon_score = case_when( k4.cluster == 4 ~ 2L, k4.cluster == 2 ~ 4L, TRUE ~ k4.cluster)) %>% 
+  select(c(household_key,sls, mon_score))
+
+describe(cust_mon3)
+
+
+
+# Overall score can be calculated by just adding up the individual scores
+
+
+cust_rfm <- cust_freq3 %>% left_join(select(cust_rec3, rec, rec_score, household_key), by = c("household_key"="household_key")) %>% 
+            left_join(select(cust_mon3,sls,mon_score, household_key), by = c("household_key"= "household_key"))
+cust_rfm <- cust_rfm %>% mutate(overall_score = freq_score+rec_score+mon_score)
+
+
+describe(cust_rfm)
 
 
