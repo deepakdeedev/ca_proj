@@ -12,7 +12,7 @@ pacman::p_load(VIM,mice,Hmisc,DMwR)
 library(ggplot2)
 library(mltools)
 library(janitor)
-library(reshape2)=
+library(reshape2)
 library(factoextra)
 library(car)
 library(MASS)
@@ -623,11 +623,11 @@ coupon %>% filter(campaign %in% c(17)) %>% group_by(coupon_upc) %>% summarise(co
 
  # Getting the performance base and observation base customers
  
-observ_base <- cmp %>%  inner_join(dplyr::select(r,hkey,household_key),by=c("household_key"="household_key")) %>% filter(campaign %in% c(8,26,30)) %>%
+observ_base <- cmp %>%  inner_join(dplyr::select(c,hhkey,household_key),by=c("household_key"="household_key")) %>% filter(campaign %in% c(8,26,30)) %>%
                group_by(household_key) %>% summarise(cmps = n_distinct(campaign),
                                                      cpns = 16*n_distinct(campaign))
  
-perf_base <- cmp %>% inner_join(dplyr::select(r,hkey,household_key),by=c("household_key"="household_key")) %>% filter(campaign %in% c(13,16))%>%
+perf_base <- cmp %>% inner_join(dplyr::select(c,hhkey,household_key),by=c("household_key"="household_key")) %>% filter(campaign %in% c(13,16))%>%
              dplyr::select(c(household_key)) %>% group_by(household_key) %>% summarise(hhkey = n_distinct(household_key))
 
 
@@ -646,17 +646,171 @@ perf_base <- perf_base %>% left_join(dplyr::select(redempt,redeem,household_key)
 # Adding coupon redemtion data at customer level (#coupons redeemed, #campaignsinvolved)
 
 
-
-
-
 obs_redempt <- coup_red %>% filter(campaign %in% c(8,26,30)) %>% group_by(household_key) %>% summarise(rdms = n(),
                                                                                         cmps_rdm = n_distinct(campaign)) 
-observ_base <- observ_base %>% left_join(dplyr::select(obs_redempt,rdms,cmps_rdm,household_key), by = c("household_key"="household_key")) %>% 
+observ_base2 <- observ_base %>% left_join(dplyr::select(obs_redempt,rdms,cmps_rdm,household_key), by = c("household_key"="household_key")) %>% 
               mutate(rdms =  if_else(is.na(rdms), 0L, rdms),
-                     cmps_rdm =  if_else(is.na(cmps_rdm), 0L, cmps_rdm))
+                     cmps_rdm =  if_else(is.na(cmps_rdm), 0L, cmps_rdm)) %>% mutate(cmps_rate = cmps_rdm/cmps*100,
+                                                                                    rdms_rate = rdms/cpns*100) %>% 
+                dplyr::select(c(household_key,cmps_rate,rdms_rate))
+
+head(observ_base2)
+
+# Filtering only for observation txns
+
+txn$hhkey <- as.integer(txn$household_key)
+obs_txn <- txn %>% inner_join(dplyr::select(observ_base2,household_key), by = c("hhkey"= "household_key")) %>% filter(day %in% c(224:264,323:369,412:460))
+
+nrow(obs_txn)
+# Adding product info
+head(prod)
+obs_txn_pr <- obs_txn %>% inner_join(dplyr::select(prod,manufacturer,department,brand,commodity_desc,sub_commodity_desc,curr_size_of_product,product_id), by = ("product_id"="product_id"))
+
+
+# Adding causal info
+
+head(causal)
+
+obs_txn_pr_ad <- obs_txn_pr %>% left_join(dplyr::select(causal,display,mailer,product_id,store_id,week_no),by = c("product_id"="product_id","store_id"="store_id","week_no"="week_no"))
+obs_txn_pr_ad2 <- obs_txn_pr_ad %>% mutate(display = if_else(is.na(display),'0', display),
+                                          mailer = if_else(is.na(mailer),'0', mailer))                                       
+               
+# Creating features
+
+
+obs_txn_pr_ad3 <- obs_txn_pr_ad2  %>% mutate(
+                                                     pvt_brnd = case_when(brand == 'Private' ~ 1, TRUE ~ 0),
+                                                     display = case_when(display == '0' ~ 0, TRUE ~ 1),
+                                                     mailer = case_when(mailer == '0' ~ 0, TRUE ~ 1)) %>% 
+                    group_by(household_key) %>% summarise(str_cnt = n_distinct(store_id),
+                                                          mnf_cnt = n_distinct(manufacturer),
+                                                          dpt_cnt = n_distinct(department),
+                                                          pvt_brnd = sum(pvt_brnd)/nrow(.)*10000,
+                                                          display = sum(display)/n_distinct(day),
+                                                          mailer = sum(mailer)/n_distinct(day))
+head(obs_txn_pr_ad2)
+
+# # Adding demographic data
+# obs_txn_pr_ad3$hhkey <- as.integer(obs_txn_pr_ad3$household_key)
+# str(obs_txn_pr_ad3)
+# obs_txn_pr_ad4 <- obs_txn_pr_ad3 %>% left_join(dplyr::select(demog,age_desc,marital_status_code,income_desc,homeowner_desc,hh_comp_desc,household_size_desc,kid_category_desc,hkey), by = c("hhkey"="hkey"))
+
+
+
+# Adding target variable
+
+obs_txn_pr_ad3$hhkey <- as.integer(obs_txn_pr_ad3$household_key)
+obs_txn_pr_ad5 <- obs_txn_pr_ad3 %>% left_join(dplyr::select(perf_base,redeem,household_key), by = c("hhkey"="household_key"))
+
+
+
+head(obs_txn_pr_ad6)
+
+# Combinnin with obs base
+
+observ_base3 <- obs_txn_pr_ad5 %>% inner_join(dplyr::select(observ_base2,cmps_rate,rdms_rate,household_key), by = c("hhkey"= "household_key"))
+obs_txn_pr_ad6 <- observ_base3 %>% dplyr::select(-c(household_key,hhkey))
+
+
+# Taking demographic info
+
+# demog2 <- fread("hh_demographic2.csv")
+# 
+# head(demog2)
+# str(demog2)
+# demog3 <- clean_names(demog2)
+# 
+# demog3$age_group <- as.factor(demog3$age_group)
+# demog3$homeowner_desc <- as.factor(demog3$homeowner_desc)
+# demog4 <- one_hot(demog3,cols = "auto")
+# 
+# demog5 <- demog4 %>% mutate(kid_category_desc = case_when(kid_category_desc == 0 ~ 0, TRUE ~ 1))
+# ?one_hot()
+# 
+# 
+# cor(demog5)
+# 
+# demog6 <- demog5 %>% dplyr::select(-c(age_group_Youth,homeowner_desc_Renter,adults,kid_category_desc))
+# 
+# 
+# 
+# observ_base4 <- observ_base3 %>% left_join(demog6, by = c("hhkey" = "household_key"))
+# 
+# observ_base5 <- observ_base4 %>% dplyr::select(-c(household_key,hhkey))
+
+# Quick Logistic model with existing imbalance
+
+# Splitting to train and test
+set.seed(234)
+observ_base5 <- obs_txn_pr_ad6
+obs_txn_pr_ad7 <- observ_base5
+obs_txn_pr_ad7$redeem <- as.factor(obs_txn_pr_ad7$redeem)
+obs_txn_pr_ad7$id <- 1:nrow(obs_txn_pr_ad7)
+train2 <- obs_txn_pr_ad7 %>% sample_frac(.75) 
+test2  <- anti_join(obs_txn_pr_ad7, train2, by = 'id') %>% dplyr::select(-c(id))
+train2 <- train2 %>% dplyr::select(-c(id))
+
+
+
+train2 <- as.data.frame(train2)
+
+## Loading DMwr to balance the unbalanced class
+library(DMwR)
+
+?SMOTE()
+str(train2)
+## Smote : Synthetic Minority Oversampling Technique To Handle Class Imbalancy In Binary Classification
+balanced.data <- SMOTE(redeem ~ ., train2, perc.over = 400, k = 8, perc.under = 100)
+
+table(train2$redeem)
+table(balanced.data$redeem)
+str(train2)
+
+str(obs_txn_pr_ad7)
+set.seed(234)
+logitmod <- glm(redeem ~ ., family = "binomial", data=balanced.data) 
+
+head(t)
+
+
+summary(logitmod)
+
+#Compute confusion table
+
+predict <- predict(logitmod, test2, type = 'response')
+
+table(test2$redeem, predict > 0.5)
 
 
 
 
 
- 
+
+
+pred.logit1 <- predict(logitmod, newdata = test2, type = "response")
+pred.logit <- ifelse(pred.logit1 > 0.5, 1 ,0)
+
+smote_op_4008100 <- test2 %>% cbind(pred.logit1)
+
+write.csv(smote_op_4008100,"smote_op_4008100.csv")
+
+mdl.op.lg <- table(test2$redeem, pred.logit)
+mdl.op.lg
+
+confusionMatrix(mdl.op.lg,,positive = '1')
+
+
+table(test2$redeem)
+
+table(train2$redeem, predict > 0.5)
+
+predict_tbl = predict(logitmod,test2)
+predict_tbl_train = predict(logitmod,train2)
+confusionMatrix(table(test2$redeem, predict_tbl))
+confusionMatrix(table(train2$redeem, predict_tbl_train))
+
+str(train2)
+
+?confusionMatrix
+
+head(obs_txn_pr_ad5)                           
