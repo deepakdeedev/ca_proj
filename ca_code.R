@@ -12,7 +12,7 @@ pacman::p_load(VIM,mice,Hmisc,DMwR)
 library(ggplot2)
 library(mltools)
 library(janitor)
-library(reshape2)
+library(reshape2)=
 library(factoextra)
 library(car)
 library(MASS)
@@ -368,8 +368,20 @@ confusionMatrix(table(test$ltv_seg, predict_tbl))
 confusionMatrix(table(train$ltv_seg, predict_tbl_train))
 
 
+head(predict_tbl)
 
+test$pred <- predict_tbl
 
+test$pred <- NULL
+
+test_pred <- test
+test_pred$pred <- predict_tbl
+
+train_pred <- train
+train_pred$pred <-predict_tbl_train
+
+write.csv(train_pred,"train_results.csv")
+write.csv()
 
 ###########################################   Experiment 2
 
@@ -422,15 +434,44 @@ confusionMatrix(table(train2$ltv_seg, predict_tbl_train))
 ###########################################   Experiment 3
 
 
-# Decision Tree
-set.seed(234)
-rf_mod = randomForest(ltv_seg ~ . , data = train2)
-summary(rf_mod)
+xg_train_data <- train %>% dplyr::select(-c(ltv_seg))
+xg_train_label <- train %>% dplyr::select(c(ltv_seg)) %>% mutate(ltv_seg2 = as.numeric((ltv_seg))) %>% dplyr::select(c(ltv_seg2))
+
+
+xg_test_data <- test %>% dplyr::select(-c(ltv_seg))
+xg_test_label <- test %>% dplyr::select(c(ltv_seg)) %>% mutate(ltv_seg2 = as.numeric((ltv_seg))) %>% dplyr::select(c(ltv_seg2))
+
+# 
+# xg_train_data <- xg_train_data %>% dplyr::select(c(pay_cnt,boleto_perc,credit_card_perc,avg_ship_cost,orders,same_st_del,
+#                                                    avg_order_val,avg_product_price,adh_prm_ind,voucher_perc))
+# xg_test_data <- xg_test_data %>% dplyr::select(c(pay_cnt,boleto_perc,credit_card_perc,avg_ship_cost,orders,same_st_del,
+#                                                  avg_order_val,avg_product_price,adh_prm_ind,voucher_perc))
+nrow(as.matrix(xg_train_data))
+
+xgtrain <- xgb.DMatrix(data = as.matrix(xg_train_data), label = as.matrix(xg_train_label))
+
+xgtest <- xgb.DMatrix(data = as.matrix(xg_test_data), label = as.matrix(xg_test_label))
 
 
 
+xgmodel <- xgboost(data = xgtrain, # the data   
+                 nround = 2) # max number of boosting iterations
+                 # the objective function
 
 
+#Compute confusion table
+
+
+
+predict_tbl = predict(xgmodel,xgtest)
+predict_tbl <- as.data.frame(predict_tbl)
+
+predict_tbl_train = predict(xgmodel,xgtrain)
+confusionMatrix(table(test$ltv_seg, predict_tbl))
+confusionMatrix(table(train$ltv_seg, predict_tbl_train))
+
+
+?xgboost()
 
 
 
@@ -447,3 +488,175 @@ head(ltv_rfm_dat2)
 
 mod <-  lm(ltv ~ ., data =  ltv_rfm_dat2[,c(3,5,7,12)])
 summary(mod) 
+
+
+
+
+
+
+
+######################################### Coupon Redemption Propoensity
+
+
+head(cmp_d)
+
+head(cmp)
+
+head(coupon)
+str(coupon)
+
+head(coup_red)
+
+nrow(cmp)
+n_distinct(cmp$household_key)
+
+f <- cmp %>% filter(description %in% c("TypeC","TypeB")) %>% 
+
+s <- cmp %>% filter(description == "TypeC") %>% dplyr::select(description, campaign)
+table(s)
+
+a <- cmp %>% filter(description == 'TypeA' & campaign %in% c(8,26,30)) %>% group_by(household_key) %>% summarise(hhkey = unique(household_key)) %>% dplyr::select(c(household_key))
+b <- cmp %>% filter(description == 'TypeA' & campaign %in% c(13,16)) %>% group_by(household_key) %>% summarise(hhkey = unique(household_key))
+
+
+
+nrow(a)
+nrow(b)
+nrow(d)
+nrow(e)
+nrow(c)
+
+c <- a %>% inner_join(dplyr::select(b,hhkey,household_key),by = c("household_key" = "household_key"))
+
+z <- na.omit(c[,2])
+z$household_key <- z$hhkey
+
+head(coup_red)
+
+d <- coup_red %>% inner_join(dplyr::select(r,hkey,household_key),by = c("household_key"="household_key")) %>% filter(campaign %in% c(8,26,30)) %>% group_by(household_key) %>% summarise(hhkeyd = unique(household_key)) 
+e <- coup_red %>% inner_join(dplyr::select(r,hkey,household_key),by = c("household_key"="household_key"))  %>% filter(campaign %in% c(13,16)) %>% group_by(household_key) %>% summarise(hhkeye = unique(household_key))
+
+
+f <- z %>% left_join(dplyr::select(d,hhkeyd,household_key),by = c("household_key" = "household_key"))
+
+
+
+head(coup_red)
+
+# Coupons that have been redeemed so far in Type A
+
+c_rdmd <- coup_red %>% filter(campaign %in% c(8,26,30)) %>% group_by(coupon_upc) %>% summarise(c_upc = unique(coupon_upc))
+
+# Coupons that are present in Type A
+
+c_all <- coupon %>% filter(campaign %in% c(8,26,30)) %>% group_by(coupon_upc) %>% summarise(c_upc_all = unique(coupon_upc))
+
+
+# Coupons that have not been redeemed at all
+
+c_nrdmd <- c_all %>% left_join(dplyr::select(c_rdmd,c_upc,coupon_upc), by = c("coupon_upc"="coupon_upc")) %>% filter(is.na(c_upc))
+
+
+head(coup_red %>% filter(campaign %in% c(8,26,30)))
+
+
+
+length(unique(f$hhkeyd))
+
+?unique()
+
+n_distinct(a$household_key)
+xnrow(cmp)
+
+head(a)
+
+
+head(coupon)
+
+coupon %>% filter(campaign %in% c(17)) %>% group_by(coupon_upc) %>% summarise(coupon = unique(coupon_upc)) %>% nrow(.)
+
+
+
+
+
+
+
+
+# Coupons that have been redeemed so far in Type A
+ coup_red %>% filter(campaign %in% c(8))
+
+ 
+ 
+ 2496 424 10000085363        8
+ 2496 424 57045970076        8
+ 2496 424 57910070076        8
+ 
+ # Coupon validity
+ 
+ coupon %>% filter(campaign == 8)
+ 
+ # Check in cmp tbl
+ 
+ cmp %>% filter(household_key == 2496 & campaign %in% c(8))
+ 
+ # Campaign 8 validity
+ 
+ cmp_d %>%  filter(campaign == 8)
+
+ head(coupon)
+ 
+ # check in txn table
+ 
+ txn %>% filter(household_key == 2496 & day %in% (412:460))
+ 
+ 
+ 
+ # Checking how many of 924 have cust info
+ demog$hkey <- demog$household_key
+ 
+ r <- c %>% inner_join(dplyr::select(demog,hkey,household_key),by = c("household_key" = "household_key"))
+ 
+ 
+ 
+ head(cmp)
+
+
+ # Getting the performance base and observation base customers
+ 
+observ_base <- cmp %>%  inner_join(dplyr::select(r,hkey,household_key),by=c("household_key"="household_key")) %>% filter(campaign %in% c(8,26,30)) %>%
+               group_by(household_key) %>% summarise(cmps = n_distinct(campaign),
+                                                     cpns = 16*n_distinct(campaign))
+ 
+perf_base <- cmp %>% inner_join(dplyr::select(r,hkey,household_key),by=c("household_key"="household_key")) %>% filter(campaign %in% c(13,16))%>%
+             dplyr::select(c(household_key)) %>% group_by(household_key) %>% summarise(hhkey = n_distinct(household_key))
+
+
+ # Adding coupon redemption to customers in the performance period
+
+head(coup_red)
+
+redempt <- coup_red %>% filter(campaign %in% c(13,16)) %>% group_by(household_key) %>% summarise(h_key = n_distinct(household_key)) %>% mutate(redeem = 1)
+
+
+perf_base <- perf_base %>% left_join(dplyr::select(redempt,redeem,household_key), by = c("household_key"="household_key")) %>% 
+              dplyr::select(c(household_key, redeem)) %>% mutate(redeem = if_else(is.na(redeem), 0, redeem))
+
+
+
+# Adding coupon redemtion data at customer level (#coupons redeemed, #campaignsinvolved)
+
+
+
+
+
+obs_redempt <- coup_red %>% filter(campaign %in% c(8,26,30)) %>% group_by(household_key) %>% summarise(rdms = n(),
+                                                                                        cmps_rdm = n_distinct(campaign)) 
+observ_base <- observ_base %>% left_join(dplyr::select(obs_redempt,rdms,cmps_rdm,household_key), by = c("household_key"="household_key")) %>% 
+              mutate(rdms =  if_else(is.na(rdms), 0L, rdms),
+                     cmps_rdm =  if_else(is.na(cmps_rdm), 0L, cmps_rdm))
+
+
+
+
+
+ 
